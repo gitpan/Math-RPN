@@ -62,18 +62,26 @@ while (@tests)
 	my $expect=shift(@tests);
 	my $expr=shift(@tests);
 	my $result=rpn($expr);
+
 	if ($expect eq "now")
 	{
 		$expect=time();
 	}
-	if ($result eq $expect)
+	else
+	{
+		# Factor rounding errors on different platforms out of results
+		$expect=(int($expect*10000+.5)/10000);
+		$result=(int($result*10000+.5)/10000);
+	}
+
+	if ($result == $expect)
 	{
 		print "ok $testno\n";
 		$testok++;
 	}
 	else
 	{
-		print "notok $testno\n";
+		print "not ok $testno (expected $expect, got $result)\n";
 		$testbad++;
 	}
 	$testno++;

@@ -13,7 +13,7 @@ require AutoLoader;
 @EXPORT = qw(
 	rpn
 );
-$VERSION = '1.00';
+$VERSION = '1.02';
 
 
 # Preloaded methods go here.
@@ -462,7 +462,7 @@ RPN - Perl extension for Reverse Polish Math Expression Evaluation
 
 =head1 SYNOPSIS
 
-  use MATH::RPN;
+  use Math::RPN;
   $value=rpn(expr);
   @array=rpn(expr);
 
@@ -530,7 +530,7 @@ benefits because any computations in the unused clause are not performed.
 
 An example would look like so:
 
-1,{,5,3,+,10,*,},{,1,2,3,+,+,},IF
+    1,{,5,3,+,10,*,},{,1,2,3,+,+,},IF
 
 This example would result in the stack containing 80 at the end of the
 evaluation.  First, the IF would be true because 1, so {,5,3,+,10,*,}
@@ -541,8 +541,11 @@ would be evaluated and the result placed on the stack.
 The following are a few examples of RPN expressions for common tasks
 and to help demonstrate the syntax used in the RPN evaluator...
 
-100,9,*,5,/,32,+	Convert 100 degrees C to 212 degrees F (100*9/5+32)
-5,3,LT,100,500,IF	Yields 500 (5!<3=0,100,500,IF==500, the "else" clause)
+    100,9,*,5,/,32,+	Convert 100 degrees C to 212 degrees F
+			(100*9/5+32)
+
+    5,3,LT,100,500,IF	Yields 500
+			(5!<3=0,100,500,IF==500, the "else" clause)
 
 
 =head1 AUTHOR

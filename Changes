@@ -4,5 +4,5 @@ Revision history for Perl extension RPN.
 	- original version; created by h2xs 1.19
 
 1.00  Mon Jul 16 23:33:00 2001
-	- Template filled in and module ready for testing as MATH::RPN
+	- Template filled in and module ready for testing as Math::RPN
 
