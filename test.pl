@@ -48,10 +48,30 @@ print "ok 1\n";
 	"15","6,18,EXCH,DIV,DUP,5,MAX,MUL,DUP,3,DIV,EXCH,POP,DUP,3,MUL,MAX",
 #	Test time
 	"now","TIME",
-#
+
 #	Complex IF (if with brace constructs)
 	"6000","5,3,GT,{,10,20,30,*,*,},{,1,2,3,*,*,},IF",
-	"6","5,3,LT,{,10,20,30,*,*,},{,1,2,3,*,*,},IF"
+	"6","5,3,LT,{,10,20,30,*,*,},{,1,2,3,*,*,},IF",
+
+#	Should produce a stack underflow
+	"ERR","5,3,POP,POP,POP,5,3,*",
+
+#	Functions added in version 1.05
+	"5", "-5,ABS",
+	"10", "5,++,++,++,++,++",
+	"5", "10,--,--,--,--,--",			# 22
+	"8", "24,40,&",					# 23
+	"32", "48,96,AND",				# 24
+	"5", "4,1,OR",					# 25
+	"15", "10,5,|",					# 26
+	"0", "5,!",					# 27
+	"1", "0,NOT",					# 28
+	"-3.38051500624659", "5,TAN",			# 29
+	"5", "2.33242123,3.123123142312,+,INT",		# 30
+	"0<x<1","RAND",					# 31
+	"0<x<100","100,LRAND",				# 32
+#	"1", "4,5,xor"					# 33
+	
 );
 
 my $testno=2;
@@ -61,11 +81,26 @@ while (@tests)
 {
 	my $expect=shift(@tests);
 	my $expr=shift(@tests);
+
+	if ($expect eq "ERR")
+	{
+		print	"The next error message is expected.  If the test \n".
+			"reports OK, then everything is well.\n";
+	}
+
 	my $result=rpn($expr);
 
 	if ($expect eq "now")
 	{
 		$expect=time();
+	}
+	elsif ($expect eq "ERR")
+	{
+		$expect=$result unless defined($result);
+	}
+	elsif ($expect =~/(\d+)<x<(\d+)/)
+	{
+		$expect=$result if ($result > $1 && $result < $2);
 	}
 	else
 	{
@@ -76,7 +111,7 @@ while (@tests)
 
 	if ($result == $expect)
 	{
-		print "ok $testno\n";
+		print "ok $testno ($result)\n";
 		$testok++;
 	}
 	else

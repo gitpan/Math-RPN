@@ -13,29 +13,33 @@ require AutoLoader;
 @EXPORT = qw(
 	rpn
 );
-$VERSION = '1.02';
+$VERSION = '1.05';
 
 
 # Preloaded methods go here.
 
 sub rpn
 {
-	my $convr=shift;
+	my $convr=join(",",@_);		# Get all the expressions
+	$convr=~s/,,//g;		# In case someone gave us extra ,'s
 	my @stack=();
 	my @ops=split(/,/, $convr);
 	my $inbrace=0;
 	my $bracexp="";
-	foreach(@ops)
+	my @completed=();
+	while(@ops)
 	{
+		$_=uc(shift(@ops));
 		s/\s+//g;	# Eliminate unneeded spaces
-		$_=uc($_);
 		if ($_ eq "{")
 		{
 			if ($inbrace)
 			{
-				my $msg="Cannot nest braces expr ".
-					"$convr at ".$_;
-				logmsg('err', $msg);
+				logmsg('err', "Cannot nest braces expr ",
+					join(",", @completed),
+					",<<<$_>>>,",
+					join(",", @ops)
+				);
 				last;
 			}
 			$inbrace++;
@@ -46,9 +50,11 @@ sub rpn
 		{
 			unless ($inbrace)
 			{
-				my $msg="Cannot nest braces expr ".
-					"$convr at ".$_;
-				logmsg('err', $msg);
+				logmsg('err', "Unexpected Right Brace ",
+					join(",", @completed),
+					",<<<$_>>>,",
+					join(",", @ops)
+					);
 				last;
 			}
 			$inbrace--;
@@ -64,53 +70,56 @@ sub rpn
 
 		if ($_ eq "+" || $_ eq "ADD")
 		{
-			if ($#stack < 1)
+			unless (stackcheck(2, \@stack, \@completed, $_, \@ops))
 			{
 				@stack=(undef);
-				my $msg="Stack Underflow for expr $convr at ".
-					$_;
-				logmsg('err', $msg);
 				last;
 			}
 			push(@stack, pop(@stack)+pop(@stack));
 		}
-		elsif ($_ eq "-" || $_ eq "SUB")
+		elsif ($_ eq "++" || $_ eq "INCR")
 		{
-			if ($#stack < 1)
+			unless (stackcheck(1, \@stack, \@completed, $_, \@ops))
 			{
 				@stack=(undef);
-				my $msg="Stack Underflow for ".
-					"expr $convr at ".
-					$_;
-				logmsg('err', $msg);
+				last;
+			}
+			push(@stack, pop(@stack)+1);
+		}
+		elsif ($_ eq "-" || $_ eq "SUB")
+		{
+			unless (stackcheck(2, \@stack, \@completed, $_, \@ops))
+			{
+				@stack=(undef);
 				last;
 			}
 			my $v1=pop(@stack);
 			my $v2=pop(@stack);
 			push(@stack, $v2-$v1);
 		}
-		elsif ($_ eq "\*" || $_ eq "MUL")
+		elsif ($_ eq "--" || $_ eq "DECR")
 		{
-			if ($#stack < 1)
+			unless (stackcheck(1, \@stack, \@completed, $_, \@ops))
 			{
 				@stack=(undef);
-				my $msg="Stack Underflow for ".
-					"expr $convr at ".
-					$_;
-				logmsg('err', $msg);
+				last;
+			}
+			push(@stack, pop(@stack)-1);
+		}
+		elsif ($_ eq "\*" || $_ eq "MUL")
+		{
+			unless (stackcheck(2, \@stack, \@completed, $_, \@ops))
+			{
+				@stack=(undef);
 				last;
 			}
 			push(@stack, pop(@stack)*pop(@stack));
 		}
 		elsif ($_ eq "\/" || $_ eq "DIV")
 		{
-			if ($#stack < 1)
+			unless (stackcheck(2, \@stack, \@completed, $_, \@ops))
 			{
 				@stack=(undef);
-				my $msg="Stack Underflow for ".
-					"expr $convr at ".
-					$_;
-				logmsg('err', $msg);
 				last;
 			}
 			my $v1=pop(@stack);
@@ -119,13 +128,9 @@ sub rpn
 		}
 		elsif ($_ eq "%" || $_ eq "MOD")
 		{
-			if ($#stack < 1)
+			unless (stackcheck(2, \@stack, \@completed, $_, \@ops))
 			{
 				@stack=(undef);
-				my $msg="Stack Underflow for ".
-					"expr $convr at ".
-					$_;
-				logmsg('err', $msg);
 				last;
 			}
 			my $v1=pop(@stack);
@@ -134,13 +139,9 @@ sub rpn
 		}
 		elsif ($_ eq "POW")
 		{
-			if ($#stack < 1)
+			unless (stackcheck(2, \@stack, \@completed, $_, \@ops))
 			{
 				@stack=(undef);
-				my $msg="Stack Underflow for ".
-					"expr $convr at ".
-					$_;
-				logmsg('err', $msg);
 				last;
 			}
 			my $v1=pop(@stack);
@@ -149,79 +150,121 @@ sub rpn
 		}
 		elsif ($_ eq "SQRT")
 		{
-                        if ($#stack < 0)
+                        unless(stackcheck(1, \@stack, \@completed, $_, \@ops))
                         {
                                 @stack=(undef);
-                                my $msg="Stack Underflow for ".
-                                        "expr $convr at ".
-                                        $_;
-                                logmsg('err', $msg);
                                 last;
                         }
 			push(@stack,sqrt(pop(@stack)));
 		}
-		elsif ($_ eq "SIN")
+		elsif ($_ eq "ABS")
 		{
-                        if ($#stack < 0)
+                        unless(stackcheck(1, \@stack, \@completed, $_, \@ops))
                         {
                                 @stack=(undef);
-                                my $msg="Stack Underflow for ".
-                                        "expr $convr at ".
-                                        $_;
-                                logmsg('err', $msg);
+                                last;
+                        }
+			push(@stack,abs(pop(@stack)));
+		}
+		elsif ($_ eq "&" || $_ eq "AND")
+		{
+                        unless(stackcheck(2, \@stack, \@completed, $_, \@ops))
+                        {
+                                @stack=(undef);
+                                last;
+                        }
+			my $v1=int(pop(@stack));
+			my $v2=int(pop(@stack));
+			push(@stack,($v1&$v2));
+		}
+		elsif ($_ eq "|" || $_ eq "OR")
+		{
+                        unless(stackcheck(2, \@stack, \@completed, $_, \@ops))
+                        {
+                                @stack=(undef);
+                                last;
+                        }
+			push(@stack,(int(pop(@stack)) | int(pop(@stack))));
+		}
+# Added XOR, but PERL's xor seems broken... Experimental.
+		elsif ($_ eq "XOR")
+		{
+                        unless(stackcheck(2, \@stack, \@completed, $_, \@ops))
+                        {
+                                @stack=(undef);
+                                last;
+                        }
+			push(@stack,(int(pop(@stack)) xor int(pop(@stack))));
+		}
+		elsif ($_ eq "!" || $_ eq "NOT")
+		{
+                        unless(stackcheck(1, \@stack, \@completed, $_, \@ops))
+                        {
+                                @stack=(undef);
+                                last;
+                        }
+			push(@stack,!(pop(@stack)));
+		}
+		elsif ($_ eq "SIN")
+		{
+                        unless(stackcheck(1, \@stack, \@completed, $_, \@ops))
+                        {
+                                @stack=(undef);
                                 last;
                         }
 			push(@stack,sin(pop(@stack)));
 		}
 		elsif ($_ eq "COS")
 		{
-                        if ($#stack < 0)
+                        unless(stackcheck(1, \@stack, \@completed, $_, \@ops))
                         {
                                 @stack=(undef);
-                                my $msg="Stack Underflow for ".
-                                        "expr $convr at ".
-                                        $_;
-                                logmsg('err', $msg);
                                 last;
                         }
 			push(@stack,cos(pop(@stack)));
 		}
-		elsif ($_ eq "LOG")
+		elsif ($_ eq "TAN")
 		{
-                        if ($#stack < 0)
+                        unless(stackcheck(1, \@stack, \@completed, $_, \@ops))
                         {
                                 @stack=(undef);
-                                my $msg="Stack Underflow for ".
-                                        "expr $convr at ".
-                                        $_;
-                                logmsg('err', $msg);
+                                last;
+                        }
+			my $v1=pop(@stack);
+			push(@stack,(sin($v1)/cos($v1)));
+		}
+		elsif ($_ eq "LOG")
+		{
+                        unless(stackcheck(1, \@stack, \@completed, $_, \@ops))
+                        {
+                                @stack=(undef);
                                 last;
                         }
 			push(@stack,log(pop(@stack)));
 		}
 		elsif ($_ eq "EXP")
 		{
-                        if ($#stack < 0)
+                        unless(stackcheck(1, \@stack, \@completed, $_, \@ops))
                         {
                                 @stack=(undef);
-                                my $msg="Stack Underflow for ".
-                                        "expr $convr at ".
-                                        $_;
-                                logmsg('err', $msg);
                                 last;
                         }
 			push(@stack,exp(pop(@stack)));
 		}
-
+		elsif ($_ eq "INT")
+		{
+                        unless(stackcheck(1, \@stack, \@completed, $_, \@ops))
+                        {
+                                @stack=(undef);
+                                last;
+                        }
+			push(@stack,int(pop(@stack)));
+		}
 		elsif ($_ eq "<" || $_ eq "LT")
 		{
-			if ($#stack < 1)
+			unless (stackcheck(2, \@stack, \@completed, $_, \@ops))
 			{
 				@stack=(undef);
-				my $msg="Stack Underflow for ".
-					"expr $convr at ".
-					$_;
-				logmsg('err', $msg);
 				last;
 			}
 			my $v1=pop(@stack);
@@ -230,13 +273,9 @@ sub rpn
 		}
 		elsif ($_ eq "<=" || $_ eq "LE")
 		{
-			if ($#stack < 1)
+			unless (stackcheck(2, \@stack, \@completed, $_, \@ops))
 			{
 				@stack=(undef);
-				my $msg="Stack Underflow for ".
-					"expr $convr at ".
-					$_;
-				logmsg('err', $msg);
 				last;
 			}
 			my $v1=pop(@stack);
@@ -245,13 +284,9 @@ sub rpn
 		}
 		elsif ($_ eq "=" || $_ eq "==" || $_ eq "EQ")
 		{
-			if ($#stack < 1)
+			unless (stackcheck(2, \@stack, \@completed, $_, \@ops))
 			{
 				@stack=(undef);
-				my $msg="Stack Underflow for ".
-					"expr $convr at ".
-					$_;
-				logmsg('err', $msg);
 				last;
 			}
 			my $v1=pop(@stack);
@@ -260,13 +295,9 @@ sub rpn
 		}
 		elsif ($_ eq ">=" || $_ eq "GT")
 		{
-			if ($#stack < 1)
+			unless (stackcheck(2, \@stack, \@completed, $_, \@ops))
 			{
 				@stack=(undef);
-				my $msg="Stack Underflow for ".
-					"expr $convr at ".
-					$_;
-				logmsg('err', $msg);
 				last;
 			}
 			my $v1=pop(@stack);
@@ -275,13 +306,9 @@ sub rpn
 		}
 		elsif ($_ eq ">" || $_ eq "GE")
 		{
-			if ($#stack < 1)
+			unless (stackcheck(2, \@stack, \@completed, $_, \@ops))
 			{
 				@stack=(undef);
-				my $msg="Stack Underflow for ".
-					"expr $convr at ".
-					$_;
-				logmsg('err', $msg);
 				last;
 			}
 			my $v1=pop(@stack);
@@ -290,13 +317,9 @@ sub rpn
 		}
 		elsif ($_ eq "!=" || $_ eq "NE")
 		{
-			if ($#stack < 1)
+			unless (stackcheck(2, \@stack, \@completed, $_, \@ops))
 			{
 				@stack=(undef);
-				my $msg="Stack Underflow for ".
-					"expr $convr at ".
-					$_;
-				logmsg('err', $msg);
 				last;
 			}
 			my $v1=pop(@stack);
@@ -305,13 +328,9 @@ sub rpn
 		}
 		elsif ($_ eq "IF")
 		{
-			if ($#stack < 2)
+			unless (stackcheck(3, \@stack, \@completed, $_, \@ops))
 			{
 				@stack=(undef);
-				my $msg="Stack Underflow for ".
-					"expr $convr at ".
-					$_;
-				logmsg('err', $msg);
 				last;
 			}
 			my $el=pop(@stack);
@@ -330,13 +349,9 @@ sub rpn
 		}
 		elsif ($_ eq "DUP")
 		{
-			if ($#stack < 0)
+			unless(stackcheck(1, \@stack, \@completed, $_, \@ops))
 			{
 				@stack=(undef);
-				my $msg="Stack Underflow for ".
-					"expr $convr at ".
-					$_;
-				logmsg('err', $msg);
 				last;
 			}
 			my $v1 = pop(@stack);
@@ -344,13 +359,9 @@ sub rpn
 		}
 		elsif ($_ eq "EXCH")
 		{
-			if ($#stack < 1)
+			unless (stackcheck(2, \@stack, \@completed, $_, \@ops))
 			{
 				@stack=(undef);
-				my $msg="Stack Underflow for ".
-					"expr $convr at ".
-					$_;
-				logmsg('err', $msg);
 				last;
 			}
 			my $v1 = pop(@stack);
@@ -359,26 +370,18 @@ sub rpn
 		}
 		elsif ($_ eq "POP")
 		{
-			if ($#stack < 0)
+			unless(stackcheck(1, \@stack, \@completed, $_, \@ops))
 			{
 				@stack=(undef);
-				my $msg="Stack Underflow for ".
-					"expr $convr at ".
-					$_;
-				logmsg('err', $msg);
 				last;
 			}
 			pop(@stack);
 		}
 		elsif ($_ eq "MIN")
 		{
-			if ($#stack < 1)
+			unless (stackcheck(2, \@stack, \@completed, $_, \@ops))
 			{
 				@stack=(undef);
-				my $msg="Stack Underflow for ".
-					"expr $convr at ".
-					$_;
-				logmsg('err', $msg);
 				last;
 			}
 			my $v1 = pop(@stack);
@@ -387,13 +390,9 @@ sub rpn
 		}
 		elsif ($_ eq "MAX")
 		{
-			if ($#stack < 1)
+			unless (stackcheck(2, \@stack, \@completed, $_, \@ops))
 			{
 				@stack=(undef);
-				my $msg="Stack Underflow for ".
-					"expr $convr at ".
-					$_;
-				logmsg('err', $msg);
 				last;
 			}
 			my $v1 = pop(@stack);
@@ -404,12 +403,31 @@ sub rpn
 		{
 			push(@stack, time());
 		}
+		elsif ($_ eq "RAND")
+		{
+			push(@stack, rand());
+		}
+		elsif ($_ eq "LRAND")
+		{
+			unless(stackcheck(1, \@stack, \@completed, $_, \@ops))
+			{
+				@stack=(undef);
+				last;
+			}
+			push(@stack, rand(pop(@stack)));
+		}
 		else
 		{
 			push(@stack, $_);
 		}
+
+		# Record that we've completed the operation (for diagnostics).
+		push(@completed, $_);
 	}
-	if ($#stack < 0)
+
+	# OK... Expression executed, let's return the results.
+
+	unless(@stack)
 	{
 		@stack=(undef);
 		logmsg('err', "Stack underflow for expr ".
@@ -448,9 +466,31 @@ sub logmsg
         $message=join("", @_);
         $message=~s/\r/\\r/g;
         $message=~s/\n/\\n/g;
-        print STDERR "$0 $$: $severity: $message at ", scalar localtime, "\n";
+        print STDERR "$0 pid[$$]: $severity: $message at ", scalar localtime, "\n";
 }
 
+sub stackcheck
+{
+	my $required=shift;
+	my $sp=shift;
+	my $completed=shift;
+	my $current=shift;
+	my $todo=shift;
+	my @stack=@$sp;
+
+	if (scalar(@stack)<$required)
+	{
+		my $msg="Stack Underflow in ";
+		logmsg('err', $msg,
+			join(",", (@$completed)),
+			",<<<$current>>>,",
+			join(",", (@$todo))
+		);
+		return(undef);
+	}
+	return(scalar(@stack));
+}
+		
 # Autoload methods go after =cut, and are processed by the autosplit program.
 
 1;
@@ -463,12 +503,18 @@ RPN - Perl extension for Reverse Polish Math Expression Evaluation
 =head1 SYNOPSIS
 
   use Math::RPN;
-  $value=rpn(expr);
-  @array=rpn(expr);
+  $value=rpn(expr...);
+  @array=rpn(expr...);
+
+  expr... is one or more scalars or lists of scalars which contain
+  RPN expressions.  An RPN expression is a series of numbers and/or
+  operators separated by commas.  (commas are only required within
+  scalars).
 
 =head1 DESCRIPTION
 
-The rpn function will take a scalar which contains an RPN expression
+The rpn function will take a scalar or list of sclars
+which contain an RPN expression
 as a set of comma delimited values and operators, and return the
 result or stack, depending on context.  If the function is called
 in an array context, it will return the entire remaining stack.
@@ -480,7 +526,7 @@ In the event of an error, an error message will be sent to STDERR,
 and rpn will return undef.
 
 The expression can contain any combination of values and operators.
-Any value which is not an operator is assumed to be a value to be
+Any token which is not an operator is assumed to be a value to be
 pushed onto the stack.
 
 An explanation of Reverse Polish Notation is beyond the scope of this
@@ -490,35 +536,102 @@ eliminating the need for parenthesis and simplifying parsing for
 computers vs. normal algebraic notation at a slight cost in
 the ability of humans to easily comprehend the expressions.
 
+This evaluator works by cycling through the expression from left
+to right.  As each token is encountered, it is checked against the
+list of operators.  If it matches, then a check is performed for
+stack underflow.  If the stack has not underflowed, the operation
+is performed by removing the required number of operands from the
+top of the stack.  The result is then pushed on to the stack.
+Operations for which order is significant (-,/,%,etc.) are
+processed such that the top item on the stack is treated as
+the right operand, and the next item down is treated as the
+left operand.   Thus, "5,3,-" would yield 2, not -2.  If the
+token does not match any of the known operators, the token
+is blindly pushed onto the stack.  As a result, one can produce
+unexpected results.  For example, the expression "5,3,grandma,+,*"
+would produce 15 because 5*(3+0) is how it would end up
+evaluated.  That is, 5 would be pushed onto the stack, then
+3, then "grandma".  Next, + is evaluated, so 3+"grandma"
+is evaluated.  PERL evaluates "grandma" to be numerically 0,
+so 3 is pushed back onto the stack.  Next, the * multiplies
+the top two items of the stack [5][3], producing 15, which
+is pushed back onto the stack.
+
 =head1 OPERATORS
+
+The operators below are expressed in terms of a simple stack grammar.
+Each item enclosed in brackets ([]) represents a single stack element.
+The -> represents the transformation that the operator performs.  That
+is, everything to the left of -> is what must be present on the stack
+before the operator, and everything to the right is what ends up on
+the stack after the operator.  For example, [a][b]->[a+b] means that
+before the + operator, there must be two elements on the stack, and
+that afterwards, the sum of the two elements will be left on the stack.
+Anything on the stack below the first item specified on the left side
+of the -> is not affected and the stack below that point remains
+as the stack below the indicated results on the right side.  In
+other words, if the stack is [5][3][2][5][6] and we evaluate a +
+operator, the transform [a][b]->[a+b] means that 5 and 6 would
+be pulled off the top of the stack and replaced with [11],
+and the resultant stack would be [5][3][2][11].
+
+Additionally, there are constructs like (condition ? result : otherwise)
+which indicate that if condition is true, result will be placed on the
+stack.  If condition is false, otherwise will be placed on the stack.
+Thus, (a!=0 ? [b] : [c]) means that if a is not equal to 0, the [b]
+will be placed on the stack.  If a is equal to 0, then [c] will be placed
+on the stack.
+
+A glossary of other symbols is provided below for reference.
 
 The following operators are supported in the RPN evaluator:
 
        Operator        Operation
        +,ADD           [a][b]->[a+b]
+       ++,INCR         [a]->[a+1]
        -,SUB           [a][b]->[a-b]
+       --,DECR         [a]->[a-1]
        *,MUL           [a][b]->[a*b]
        /,DIV           [a][b]->[a/b]
        %,MOD           [a][b]->[a%b]
        POW             [a][b]->[a^b]
        SQRT            [a]->[sqrt(a)]
+
        SIN             [a]->[sin(a)]
        COS             [a]->[cos(a)]
+       TAN             [a]->[tan(a)]
+
        LOG             [a]->[log(a)]
        EXP             [a]->[e^a]
+
+       ABS             [a]->[abs(a)]
+       INT             [a]->[int(a)]
+
+       &,AND           [a][b]->[a&b]
+       |,OR            [a][b]->[a|b]
+       !,NOT           [a]->(a==0 ? [1] : [0])
+
        <,LT            [a][b]->(a<b ? [1] : [0])
        <=,LE           [a][b]->(a<=b ? [1] : [0])
        =,==,EQ         [a][b]->(a==b ? [1] : [0])
        >,GT            [a][b]->(a>b ? [1] : [0])
        >=,GE           [a][b]->(a>=b ? [1] : [0])
        !=,NE           [a][b]=>(a!=b ? [1] : [0])
+
        IF              [a][b][c]-> (a!=0 ? [b] : [c])
+
        DUP             [a]->[a][a]
        EXCH            [a][b]->[b][a]
        POP             [a][b]->[a]
+
        MIN             [a][b]->([a]<[b] ? [a] : [b])
        MAX             [a][b]->([a]>[b] ? [a] : [b])
-       TIME            Pushes current time (seconds since midnight UTC 1970)
+
+       TIME            Pushes current time
+			(seconds since midnight UTC 1970)
+
+       RAND            Pushes a random number 0<x<1 onto the stack.
+       LRAND           [a]->[x=rand(0<x<a)]
 
 In addition, the IF operator supports special constructs for the "then" and
 "else" clauses on the stack.  The construct allows an RPN expression to be
@@ -536,6 +649,13 @@ This example would result in the stack containing 80 at the end of the
 evaluation.  First, the IF would be true because 1, so {,5,3,+,10,*,}
 would be evaluated and the result placed on the stack.
 
+
+The boolean operator xor is incorporated into the code, but is not
+tested.  It is believed at this time that the underlying xor functionality
+in PERL may be broken, so the operator is considered strictly experimental.
+Use it at your own risk.  The xor operator is not otherwise documented.
+
+
 =head1 EXAMPLES
 
 The following are a few examples of RPN expressions for common tasks
@@ -546,6 +666,53 @@ and to help demonstrate the syntax used in the RPN evaluator...
 
     5,3,LT,100,500,IF	Yields 500
 			(5!<3=0,100,500,IF==500, the "else" clause)
+
+
+=head1 REFERENCE
+
+The following symbols and are used in the description of the RPN operators.
+The explanation here is intended as a brief reference.  For more information,
+consult a text on mathematics, boolean algebra, or trigonometry, as
+appropriate.
+
+    SYMBOL	CATEGORY	Meaning
+      ^		(MATH)		Power of (x^y is X to the power of Y,
+				x^2 is X Squared, etc.)
+
+      %		(MATH)		Modulus, or Division Remainder
+
+      &		(BOOLEAN)	Boolean Bitwise AND
+
+      |		(BOOLEAN)	Boolean Bitwise OR
+
+      !		(BOOLEAN)	Invert a boolean value
+				(true->false, false->true)
+
+     sqrt	(MATH)		Square Root (sqrt(9) is 3)
+
+     sin	(TRIG)		SINE of the given angle (in radians)
+
+     cos	(TRIG)		COSINE of the given angle (in radians)
+
+     tan	(TRIG)		TANGENT of the given angle (in radians)
+
+     log	(MATH)		The logarithm of the given number. (such
+				that e^log(x) is x [e is an irrational
+				mathematical constant used for all sorts
+				of things])
+
+     exp	(MATH)		The opposite of log. exp(x) returns e^x.
+				exp(log(x)) returns x.
+
+     abs	(MATH)		The "absolute" value of the given number.
+				abs(-5) is 5.  abs(5) is 5.  Basically,
+				x=(x<0? x*-1 : x).
+
+     int	(MATH)		Truncate the given number to its integer
+				portion, discarding any fractional part.
+				(This does not round, 4.9 would become 4)
+				If rounding is desired, n,.5,+,INT can
+				be used.
 
 
 =head1 AUTHOR
