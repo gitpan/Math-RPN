@@ -1,3 +1,18 @@
+#!/usr/bin/perl
+#
+# Math::RPN Package for Perl version 5 and later.
+#
+# Complete POD documentation at end.
+#
+# @(#)RPN.pm 1.8 01/07/29 Copyright (C) 2001 Owen DeLong, All rights reserved.
+#
+# Distributed under the standard PERL license, which is incorporated
+# herein by reference.
+#
+# All distributions of this software must contain this copyright
+# notice and license.
+#
+
 package Math::RPN;
 
 use strict;
@@ -13,8 +28,7 @@ require AutoLoader;
 @EXPORT = qw(
 	rpn
 );
-$VERSION = '1.05';
-
+$VERSION = do { my @r = (q$1.8$ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r }; # must be all one line, for MakeMaker
 
 # Preloaded methods go here.
 
@@ -203,7 +217,16 @@ sub rpn
                                 @stack=(undef);
                                 last;
                         }
-			push(@stack,!(pop(@stack)));
+			push(@stack,!(int(pop(@stack))));
+		}
+		elsif ($_ eq "~")
+		{
+                        unless(stackcheck(1, \@stack, \@completed, $_, \@ops))
+                        {
+                                @stack=(undef);
+                                last;
+                        }
+			push(@stack,~(int(pop(@stack))));
 		}
 		elsif ($_ eq "SIN")
 		{
@@ -610,6 +633,7 @@ The following operators are supported in the RPN evaluator:
        &,AND           [a][b]->[a&b]
        |,OR            [a][b]->[a|b]
        !,NOT           [a]->(a==0 ? [1] : [0])
+       ~               [a]->(a xor -1) (Inverts all the bits in a)
 
        <,LT            [a][b]->(a<b ? [1] : [0])
        <=,LE           [a][b]->(a<=b ? [1] : [0])
@@ -632,6 +656,11 @@ The following operators are supported in the RPN evaluator:
 
        RAND            Pushes a random number 0<x<1 onto the stack.
        LRAND           [a]->[x=rand(0<x<a)]
+
+Bitwise Boolean operations (&,|,!,~) are performed against the integerized
+(truncated) versions of the values on the stack.  That is, [a][b]->[a&b]
+is performed internally as
+C<push(@stack, (int(pop(@stack))&int(pop(@stack))))>.
 
 In addition, the IF operator supports special constructs for the "then" and
 "else" clauses on the stack.  The construct allows an RPN expression to be

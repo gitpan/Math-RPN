@@ -45,3 +45,20 @@ Revision history for Perl extension RPN.
 
 	- Enhanced diagnostics
 
+1.06  Sun Jul 29 11:52:00 2001
+	- Integrated into SCCS (versions above don't necessarily match,
+	  versions below will).
+
+	- Created build directory with SCCS files
+
+	- Created mkdist script to compute version and create file for
+	  upload to CPAN.
+
+1.07  Sun Jul 29 12:12:00 2001
+	- Added ones-compliment functionality
+
+	- Synchronized ALL files SCCS versions
+
+1.08  Sun Jul 29 12:29:00 2001
+	- Should have tested the POD before checking it in.  (!)
+
