@@ -1,14 +1,17 @@
 ---
-abstract: ~
+abstract: 'Perl extension for Reverse Polish Math Expression Evaluation'
 author:
   - 'Owen DeLong'
 build_requires:
+  ExtUtils::MakeMaker: 6.59
   Test::More: 0.47
+  Test::NoWarnings: 0
   Test::Warn: 0
 configure_requires:
-  ExtUtils::MakeMaker: 6.50
+  ExtUtils::MakeMaker: 6.59
 distribution_type: module
-generated_by: 'Module::Install version 0.81'
+dynamic_config: 1
+generated_by: 'Module::Install version 1.06'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -24,4 +27,5 @@ requires:
   perl: 5.6.0
 resources:
   license: http://dev.perl.org/licenses/
-version: 1.09
+  repository: https://github.com/szabgab/Math-RPN
+version: 1.11

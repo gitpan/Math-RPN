@@ -9,7 +9,7 @@ require Exporter;
 
 @ISA     = qw(Exporter);
 @EXPORT  = qw( rpn );
-$VERSION = '1.09';
+$VERSION = '1.11';
 
 sub rpn {
     my $convr = join( ",", @_ );    # Get all the expressions
@@ -150,8 +150,6 @@ sub rpn {
             }
             push( @stack, ( int( pop(@stack) ) | int( pop(@stack) ) ) );
         }
-
-        # Added XOR, but PERL's xor seems broken... Experimental.
         elsif ( $_ eq "XOR" ) {
             unless ( stackcheck( 2, \@stack, \@completed, $_, \@ops ) ) {
                 @stack = (undef);
@@ -412,7 +410,7 @@ __END__
 
 =head1 NAME
 
-RPN - Perl extension for Reverse Polish Math Expression Evaluation
+Math::RPN - Perl extension for Reverse Polish Math Expression Evaluation
 
 =head1 SYNOPSIS
 
@@ -425,10 +423,21 @@ RPN expressions.  An RPN expression is a series of numbers and/or
 operators separated by commas.  (commas are only required within
 scalars).
 
-So for example:
+See EXAMPLES
 
-  rpn(qw(1 2 +))       is 3
-  rpn(qw(1 2 + 3 *))   is 9
+=head1 EXAMPLES
+
+The following are a few examples of RPN expressions for common tasks
+and to help demonstrate the syntax used in the RPN evaluator...
+
+    100,9,*,5,/,32,+	Convert 100 degrees C to 212 degrees F
+			(100*9/5+32)
+
+    5,3,LT,100,500,IF	Yields 500
+			(5!<3=0,100,500,IF==500, the "else" clause)
+
+  rpn(1, 2, '+')           is the same as 1+2   that returns 3
+  rpn(1, 2, '+', 3, '*')   is the same as 1+2*3 that returns 9
 
 =head1 DESCRIPTION
 
@@ -471,7 +480,7 @@ unexpected results.  For example, the expression "5,3,grandma,+,*"
 would produce 15 because 5*(3+0) is how it would end up
 evaluated.  That is, 5 would be pushed onto the stack, then
 3, then "grandma".  Next, + is evaluated, so 3+"grandma"
-is evaluated.  PERL evaluates "grandma" to be numerically 0,
+is evaluated.  Perl evaluates "grandma" to be numerically 0,
 so 3 is pushed back onto the stack.  Next, the * multiplies
 the top two items of the stack [5][3], producing 15, which
 is pushed back onto the stack.
@@ -529,7 +538,8 @@ The following operators are supported in the RPN evaluator:
        &,AND           [a][b]->[a&b]
        |,OR            [a][b]->[a|b]
        !,NOT           [a]->(a==0 ? [1] : [0])
-       ~               [a]->(a xor -1) (Inverts all the bits in a)
+       XOR             [a][b]=>[a xor b] (exclusive or)
+       ~               [a]->(a ^ -1) (Inverts all the bits in a)
 
        <,LT            [a][b]->(a<b ? [1] : [0])
        <=,LE           [a][b]->(a<=b ? [1] : [0])
@@ -575,24 +585,6 @@ evaluation.  First, the IF would be true because 1, so {,5,3,+,10,*,}
 would be evaluated and the result placed on the stack.
 
 
-The boolean operator xor is incorporated into the code, but is not
-tested.  It is believed at this time that the underlying xor functionality
-in PERL may be broken, so the operator is considered strictly experimental.
-Use it at your own risk.  The xor operator is not otherwise documented.
-
-
-=head1 EXAMPLES
-
-The following are a few examples of RPN expressions for common tasks
-and to help demonstrate the syntax used in the RPN evaluator...
-
-    100,9,*,5,/,32,+	Convert 100 degrees C to 212 degrees F
-			(100*9/5+32)
-
-    5,3,LT,100,500,IF	Yields 500
-			(5!<3=0,100,500,IF==500, the "else" clause)
-
-
 =head1 REFERENCE
 
 The following symbols and are used in the description of the RPN operators.
@@ -603,6 +595,10 @@ appropriate.
     SYMBOL	CATEGORY	Meaning
       ^		(MATH)		Power of (x^y is X to the power of Y,
 				x^2 is X Squared, etc.)
+
+WARNING: ^ is marked as poser here while in perl ** marks "power" and ^ is
+the bitwise xor. There might be some changes in this module later on to
+straigthen this out.
 
       %		(MATH)		Modulus, or Division Remainder
 
